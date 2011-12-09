@@ -115,8 +115,7 @@ sub find_resource_location {
 	
 	if (not defined $type_location) { $plugin->nagios_exit(CRITICAL, "Could not find location for '$name' category!"); }
 	
-	$request = HTTP::Request->new(GET => $type_location);
-	$request->header('Accept' => 'text/occi');
+	$request = construct_request("GET", $type_location);
 	$response = $http_agent->request($request);
 	
 	if ($response->is_success) {
@@ -124,17 +123,10 @@ sub find_resource_location {
 		foreach (@locations) {
 			# Search for target resource by evaluating its name
 			my $location = trim($_);
-			$request = HTTP::Request->new(GET => $location);
-			$request->header('Accept' => 'text/occi');
+			$request = construct_request("GET", $location);
 			$response = $http_agent->request($request);
 			if ($response->is_success) {
-#				my @attributes = split(/,/, $response->header("X-OCCI-Attribute"));
 				my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
-#				foreach (@attributes) {
-#					if ($_ =~ m/(.*)=(.*)/) {
-#						$attributes_hash{$1} = $2;
-#					}
-#				}
 				if ($attributes_hash{"occi.core.title"} =~ m/$name/) {
 					my ($occi_id, $occi_location) = ($attributes_hash{"occi.core.id"}, $location);
 					print "** found: $occi_location";
@@ -259,17 +251,14 @@ local $SIG{TERM} = sub {
 alarm($plugin->opts->timeout);
 
 my ($state, $result, $curl);
-
-my $occi_endpoint	= $plugin->opts->hostname . ":" . $plugin->opts->port;
-
 my ($request, $response);
+
+my $occi_endpoint = $plugin->opts->hostname . ":" . $plugin->opts->port;
 
 our $http_agent = LWP::UserAgent->new;
 
-$request = HTTP::Request->new(GET => $occi_endpoint . "/-/");
-$request->header('Accept' => 'text/occi');
-
-$response = $http_agent->request($request);
+$request	= construct_request("GET", $occi_endpoint . "/-/");
+$response	= $http_agent->request($request);
 
 # Build category -> location hash
 our %type_locations = ();
@@ -319,19 +308,15 @@ my $link_header =	"<$network_location>" . q|;rel="http://schemas.ogf.org/occi/in
 
 my $category_header = q|compute; scheme="http://schemas.ogf.org/occi/infrastructure#";class="kind";|;
 
-$request = HTTP::Request->new(POST 	=> $occi_endpoint . "/compute/");
-$request->header('Accept'			=> 'text/occi');
+$request = construct_request("POST", $occi_endpoint . "/compute/");
 $request->header('Category'			=> $category_header);
 $request->header('X-OCCI-Attribute'	=> $attribute_header);
 $request->header('Link'				=> $link_header);
 
-print "*** request: $request ****\n";
-
 $response = $http_agent->request($request);
 
 if (not $response->is_success) {
-	print "*** error: " . $response->status_line;
-	$plugin->nagios_exit(CRITICAL, "Could not instantiate virtual machine!"); 
+	$plugin->nagios_exit(CRITICAL, "Could not instantiate virtual machine: " . $response->status_line); 
 }
 
 # Wait till compute resource is online
