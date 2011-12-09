@@ -1,0 +1,362 @@
+#! /usr/bin/perl -w
+# nagios: -epn 
+#
+# Probe for checking the successful instantiation of a virtual machine
+# Copyright (c) 2011 Piotr Kasprzak, Ali Jehangiri
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Installation:
+#
+# perl -MCPAN -e shell
+# cpan> install Nagios::Plugin
+
+#
+# Changes and Modifications
+# =========================
+# 07-Dec-2011 - 0.1: Created;
+
+use strict;
+use Nagios::Plugin;
+use Sys::Syslog;
+use LWP::UserAgent;
+
+# Standard variables used in Nagios::Plugin constructor
+my $PROGNAME = 'VMInstantiation-probe';
+my $VERSION = '0.1';
+my $DESCRIPTION = 'Probe for checking the successful instantiation of a virtual machine';
+my $EXTRA_DESC = '';
+
+my $LICENSE = 'This nagios plugin is free software, and comes with ABSOLUTELY NO WARRANTY.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+   http://www.apache.org/licenses/LICENSE-2.0
+Copyright 2011 Piotr Kasprzak, Ali Jehangiri';
+
+my $SHORTNAME = 'VM INSTANTIATION';
+
+# OCCI resource names
+
+# Execute shell command
+sub exec_cmd {
+
+	my $c = shift; my ($state, $result);
+
+	$result = qx/$c/;
+	if ($? == -1) {
+		$state = CRITICAL;
+	} else {
+		$state = OK;
+	};
+
+	print "cmd: $c";
+	print "result: $result";
+	
+	return ($state, $result);
+}
+
+sub trim {
+
+	my $string = shift;
+	$string =~ s/^\s+//;
+	$string =~ s/\s+$//;
+	return $string;
+}
+
+sub construct_request {
+
+	my $method 		= shift;
+	my $endpoint	= shift;
+	
+	my $request;
+	
+	$request = HTTP::Request->new($method	=> $endpoint);
+	$request->header('Accept'				=> 'text/occi');
+	
+	return $request;
+}
+
+# Parse OCCI attributes from X-OCCI-Attribute header and return them as a name -> value hash
+sub parse_attributes {
+	my $attribute_header = shift;
+	my @attributes = split(/,/, $attribute_header);
+	my %attributes_hash;
+	foreach (@attributes) {
+		if ($_ =~ m/(.*)=(.*)/) {
+			$attributes_hash{$1} = $2;
+		}
+	}
+	return %attributes_hash;
+}
+
+# Search for the location / occi-id of a named resource
+sub find_resource_location {
+
+	our $http_agent;
+	our %type_locations;
+	our $plugin;
+
+	my $type = shift;
+	my $name = shift;
+	my ($request, $response);
+	
+	my $type_location = $type_locations{$type};
+	
+	if (not defined $type_location) { $plugin->nagios_exit(CRITICAL, "Could not find location for '$name' category!"); }
+	
+	$request = HTTP::Request->new(GET => $type_location);
+	$request->header('Accept' => 'text/occi');
+	$response = $http_agent->request($request);
+	
+	if ($response->is_success) {
+		my @locations = split(/,/, $response->header("X-OCCI-Location"));
+		foreach (@locations) {
+			# Search for target resource by evaluating its name
+			my $location = trim($_);
+			$request = HTTP::Request->new(GET => $location);
+			$request->header('Accept' => 'text/occi');
+			$response = $http_agent->request($request);
+			if ($response->is_success) {
+#				my @attributes = split(/,/, $response->header("X-OCCI-Attribute"));
+				my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
+#				foreach (@attributes) {
+#					if ($_ =~ m/(.*)=(.*)/) {
+#						$attributes_hash{$1} = $2;
+#					}
+#				}
+				if ($attributes_hash{"occi.core.title"} =~ m/$name/) {
+					my ($occi_id, $occi_location) = ($attributes_hash{"occi.core.id"}, $location);
+					print "** found: $occi_location";
+					return ($occi_id, $occi_location);
+				}
+			}
+
+			print "$_\n";
+			my @desc_elements = split(/;/, $_);
+			foreach (@desc_elements) {
+				print "$_\n";	
+				if ($_ =~ m/location=(.*)/) {
+					print "***location: $1\n";
+					$type_locations{$desc_elements[0]} = $1;
+				} 
+			}
+			print "$_\n";
+		}
+		
+	}
+	
+	$plugin->nagios_exit(CRITICAL, "Resource '$name' could not be found!");
+}
+
+sub delete_compute {
+	
+	our $compute_location;
+	our $http_agent;
+	our $plugin;
+	
+	if (defined $compute_location) {
+		my $request = construct_request("DELETE", $compute_location);
+		my $response = $http_agent->request($request);
+		if (not $response->is_success) {
+			$plugin->nagios_exit(CRITICAL, "Compute resource at location '$compute_location' could not be deleted!");
+		}
+	} else {
+		# Nothing to do, no VM
+	} 
+}
+
+sub render_attributes {
+
+	my $attributes = shift;
+	my $header = "";
+
+	while ( my ($attribute_name, $attribute_value) = each(%$attributes)) {
+		$header .= $attribute_name . "=\"" . $attribute_value . "\",";
+	}	
+	
+	print "*** header: $header ***";
+	
+	return substr($header, 0, length($header) - 1);
+}
+
+openlog("VMInstantiation-probe", "ndelay,pid", "user");
+#nagios_debug("started");
+
+# Create Nagios::Plugin instance
+
+our $plugin = Nagios::Plugin->new (usage 	=> "Usage: %s <-H <hostname> -p <port>>|<-f <file>>",
+                                  shortname	=> $SHORTNAME,
+                                  version	=> $VERSION,
+                                  blurb		=> $DESCRIPTION,
+                                  extra		=> $EXTRA_DESC,
+                                  license	=> $LICENSE,
+                                  plugin 	=> $PROGNAME);
+
+# Define additional arguments
+
+$plugin->add_arg(
+	spec		=> 'hostname|H=s',
+    help		=> "H|hostname\n   Name or IP address of host to check.\n   (default: localhost)",
+    required	=> 0,
+    default		=> 'localhost'
+);
+
+$plugin->add_arg(
+    spec		=> 'port|p=i',
+    help		=> "p|port\n   Port of the OCCI service.\n   (default: 3000)",
+    required	=> 0,
+    default		=> 3000
+);
+
+$plugin->add_arg(
+    spec		=> 'user|u=s',
+    help		=> "u|user\n   OCCI-service username.\n   (default: occi)",
+    required	=> 0,
+    default		=> 'occi'
+);
+
+#$plugin->add_arg(
+#    spec		=> 'password|pw=s',
+#    help		=> "p|password\n   OCCI-service password.\n   (default: occi)",
+#    required	=> 0,
+#    default		=> 'occi'
+#);
+
+#$plugin->add_arg(
+#    spec		=> 'maxwaittime|t=i',
+#    help		=> "t|maxwaittime\n   Maximum waiting time for the instantiation of the virtual machine (seconds).\n   (default: 300)",
+#    required	=> 0,
+#    default		=> 300
+#);
+
+$plugin->getopts;
+
+# Signal handler - TERM
+
+local $SIG{ALRM} = sub {
+    local $SIG{TERM} = 'IGNORE';
+    kill TERM => -$$;
+    $plugin->nagios_die("Timeout occured.");
+};
+
+local $SIG{TERM} = sub {
+    local $SIG{TERM} = 'IGNORE';
+    kill TERM => -$$;
+    $plugin->nagios_die("Plugin received TERM signal.");
+};
+
+alarm($plugin->opts->timeout);
+
+my ($state, $result, $curl);
+
+my $occi_endpoint	= $plugin->opts->hostname . ":" . $plugin->opts->port;
+
+my ($request, $response);
+
+our $http_agent = LWP::UserAgent->new;
+
+$request = HTTP::Request->new(GET => $occi_endpoint . "/-/");
+$request->header('Accept' => 'text/occi');
+
+$response = $http_agent->request($request);
+
+# Build category -> location hash
+our %type_locations = ();
+if ($response->is_success) {
+	print $response->header("Category");
+	my @categories = split(/,/, $response->header("Category"));
+	foreach (@categories) {
+		print "$_\n";
+		my @desc_elements = split(/;/, $_);
+		foreach (@desc_elements) {
+			print "$_\n";	
+			if ($_ =~ m/location=(.*)/) {
+				print "***location: $1\n";
+				$type_locations{$desc_elements[0]} = $1;
+			} 
+		}
+		print "$_\n";
+	};
+}
+else {
+	print "Error: " . $response->status_line . "\n";
+}
+
+# Find the needed resources (storage and network)
+my ($storage_id, $storage_location) = find_resource_location("storage", "Ubuntu 11.10 Server");
+my ($network_id, $network_location) = find_resource_location("network", "GWDG-Cloud");
+
+# Make locations relative
+$storage_location = substr($storage_location, length($occi_endpoint));
+$network_location = substr($network_location, length($occi_endpoint));
+
+# Create virtual machine with links to selected network and storage resources
+
+my %vm_attributes = (
+	'occi.core.title'			=> "FedCloud Nagios Probe VM",
+	'occi.core.summary'			=> "",
+	'occi.compute.architecture'	=> "x64",
+	'occi.compute.cores'		=> 1,
+	'occi.compute.memory'		=> 1	
+);
+
+my $attribute_header = render_attributes(\%vm_attributes);
+print "render: " . $attribute_header;
+
+my $link_header =	"<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| .
+					"<$storage_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#storage";category="http://schemas.ogf.org/occi/core#link";|;
+
+my $category_header = q|compute; scheme="http://schemas.ogf.org/occi/infrastructure#";class="kind";|;
+
+$request = HTTP::Request->new(POST 	=> $occi_endpoint . "/compute/");
+$request->header('Accept'			=> 'text/occi');
+$request->header('Category'			=> $category_header);
+$request->header('X-OCCI-Attribute'	=> $attribute_header);
+$request->header('Link'				=> $link_header);
+
+print "*** request: $request ****\n";
+
+$response = $http_agent->request($request);
+
+if (not $response->is_success) {
+	print "*** error: " . $response->status_line;
+	$plugin->nagios_exit(CRITICAL, "Could not instantiate virtual machine!"); 
+}
+
+# Wait till compute resource is online
+our $compute_location = $response->header("Location");
+print "\n*** resp. loc. header: " . $compute_location;
+#print "\n*** resp. body: " . $response->content;
+
+$request = construct_request("GET", $compute_location);
+
+print "\n*** request sent... ***";
+
+# Poll
+while (1) {
+	$response = $http_agent->request($request);
+	if ($response->is_success) {
+		my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
+		print "\n*** state: " . $attributes_hash{"occi.compute.state"};
+		if ($attributes_hash{"occi.compute.state"} eq "active") {
+			last;
+		}
+	}
+	sleep(0.5);
+}
+
+# Delete compute resource
+delete_compute();
+
+$plugin->nagios_exit(OK, "Compute resource was successfully instantiated and deleted.");
