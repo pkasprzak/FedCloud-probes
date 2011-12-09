@@ -20,6 +20,7 @@
 #
 # perl -MCPAN -e shell
 # cpan> install Nagios::Plugin
+# cpan> install Log::Log4perl
 
 #
 # Changes and Modifications
@@ -32,20 +33,18 @@ use Log::Log4perl;
 use LWP::UserAgent;
 
 # Standard variables used in Nagios::Plugin constructor
-my $PROGNAME = 'VMInstantiation-probe';
-my $VERSION = '0.1';
-my $DESCRIPTION = 'Probe for checking the successful instantiation of a virtual machine';
-my $EXTRA_DESC = '';
+my $PROGNAME	= 'VMInstantiation-probe';
+my $VERSION		= '0.1';
+my $DESCRIPTION	= 'Probe for checking the successful instantiation of a virtual machine';
+my $EXTRA_DESC	= '';
+my $SHORTNAME	= 'VM INSTANTIATION';
 
-my $LICENSE = 'This nagios plugin is free software, and comes with ABSOLUTELY NO WARRANTY.
+my $LICENSE		= 'This nagios plugin is free software, and comes with ABSOLUTELY NO WARRANTY.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
    http://www.apache.org/licenses/LICENSE-2.0
 Copyright 2011 Piotr Kasprzak, Ali Jehangiri';
-
-my $SHORTNAME = 'VM INSTANTIATION';
-
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Initialize logger
@@ -61,7 +60,8 @@ my $log4j_conf = q(
  
   log4perl.appender.Screen        	= Log::Log4perl::Appender::Screen
   log4perl.appender.Screen.stderr	= 0
-  log4perl.appender.Screen.layout	= Log::Log4perl::Layout::SimpleLayout
+  log4perl.appender.Screen.layout   = Log::Log4perl::Layout::PatternLayout
+  log4perl.appender.Screen.layout.ConversionPattern = [%d %F%M:%L] %m%n
 );
 
 Log::Log4perl::init(\$log4j_conf);
