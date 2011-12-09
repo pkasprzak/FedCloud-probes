@@ -59,9 +59,6 @@ sub exec_cmd {
 	} else {
 		$state = OK;
 	};
-
-	print "cmd: $c";
-	print "result: $result";
 	
 	return ($state, $result);
 }
@@ -69,6 +66,7 @@ sub exec_cmd {
 sub trim {
 
 	my $string = shift;
+
 	$string =~ s/^\s+//;
 	$string =~ s/\s+$//;
 	return $string;
@@ -218,12 +216,26 @@ $plugin->add_arg(
     default		=> 'occi'
 );
 
-#$plugin->add_arg(
-#    spec		=> 'password|pw=s',
-#    help		=> "p|password\n   OCCI-service password.\n   (default: occi)",
-#    required	=> 0,
-#    default		=> 'occi'
-#);
+$plugin->add_arg(
+    spec		=> 'network|n=s',
+    help		=> "n|network\n   Name of the network to use for compute resource instantiation.\n   (default: GWDG-Cloud)",
+    required	=> 0,
+    default		=> 'GWDG-Cloud'
+);
+
+$plugin->add_arg(
+    spec		=> 'image|i=s',
+    help		=> "i|image\n   Name of the image to use for compute resource instantiation.\n   (default: GWDG Ubuntu 11.10 Server)",
+    required	=> 0,
+    default		=> 'GWDG Ubuntu 11.10 Server'
+);
+
+$plugin->add_arg(
+    spec		=> 'password|pw=s',
+    help		=> "pw|password\n   OCCI-service password.\n   (default: occi)",
+    required	=> 0,
+    default		=> 'occi'
+);
 
 #$plugin->add_arg(
 #    spec		=> 'maxwaittime|t=i',
@@ -283,8 +295,8 @@ else {
 }
 
 # Find the needed resources (storage and network)
-my ($storage_id, $storage_location) = find_resource_location("storage", "Ubuntu 11.10 Server");
-my ($network_id, $network_location) = find_resource_location("network", "GWDG-Cloud");
+my ($storage_id, $storage_location) = find_resource_location("storage", $plugin->opts->image);
+my ($network_id, $network_location) = find_resource_location("network", $plugin->opts->network);
 
 # Make locations relative
 $storage_location = substr($storage_location, length($occi_endpoint));
