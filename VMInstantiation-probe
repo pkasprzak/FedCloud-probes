@@ -225,9 +225,9 @@ $plugin->add_arg(
 
 $plugin->add_arg(
     spec		=> 'image|i=s',
-    help		=> "i|image\n   Name of the image to use for compute resource instantiation.\n   (default: GWDG Ubuntu 11.10 Server)",
+    help		=> "i|image\n   Name of the image to use for compute resource instantiation.\n   (default: Ubuntu 11.10 Server)",
     required	=> 0,
-    default		=> 'GWDG Ubuntu 11.10 Server'
+    default		=> 'Ubuntu 11.10 Server'
 );
 
 $plugin->add_arg(
@@ -237,13 +237,6 @@ $plugin->add_arg(
     default		=> 'occi'
 );
 
-#$plugin->add_arg(
-#    spec		=> 'maxwaittime|t=i',
-#    help		=> "t|maxwaittime\n   Maximum waiting time for the instantiation of the virtual machine (seconds).\n   (default: 300)",
-#    required	=> 0,
-#    default		=> 300
-#);
-
 $plugin->getopts;
 
 # Signal handler - TERM
@@ -251,12 +244,14 @@ $plugin->getopts;
 local $SIG{ALRM} = sub {
     local $SIG{TERM} = 'IGNORE';
     kill TERM => -$$;
+    delete_compute();
     $plugin->nagios_die("Timeout occured.");
 };
 
 local $SIG{TERM} = sub {
     local $SIG{TERM} = 'IGNORE';
     kill TERM => -$$;
+    delete_compute();
     $plugin->nagios_die("Plugin received TERM signal.");
 };
 
@@ -350,7 +345,7 @@ while (1) {
 			last;
 		}
 	}
-	sleep(0.5);
+	sleep(1);
 }
 
 # Delete compute resource
