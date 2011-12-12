@@ -130,7 +130,7 @@ sub parse_attributes {
 	my %attributes_hash;
 
 	foreach (@attributes) {
-		if ($_ =~ m/(.*)=(.*)/) {
+		if (trim($_) =~ m/(.*)=(.*)/) {
 			$attributes_hash{$1} = $2;
 		}
 	}
@@ -213,7 +213,7 @@ sub render_attributes {
 	my $attributes = shift;
 	my $header = "";
 
-	while ( my ($attribute_name, $attribute_value) = each(%$attributes)) {
+	while (my ($attribute_name, $attribute_value) = each(%$attributes)) {
 		$header .= $attribute_name . "=\"" . $attribute_value . "\",";
 	}	
 	
@@ -236,6 +236,17 @@ our $plugin = Nagios::Plugin->new (usage 	=> "Usage: %s <-H <hostname> -p <port>
                                   extra		=> $EXTRA_DESC,
                                   license	=> $LICENSE,
                                   plugin 	=> $PROGNAME);
+
+# Compute resource default attributes
+my %vm_attributes = (
+	'occi.core.title'			=> "FedCloud Nagios Probe VM",
+	'occi.core.summary'			=> "",
+	'occi.compute.architecture'	=> "x64",
+	'occi.compute.cores'		=> 1,
+	'occi.compute.memory'		=> 1	
+);
+
+my $attribute_header = render_attributes(\%vm_attributes);
 
 # Define additional arguments
 
@@ -279,6 +290,13 @@ $plugin->add_arg(
     help		=> "i|image\n   Name of the image to use for compute resource instantiation.\n   (default: Ubuntu 11.10 Server)",
     required	=> 0,
     default		=> 'Ubuntu 11.10 Server'
+);
+
+$plugin->add_arg(
+    spec		=> 'attributes|a=s',
+    help		=> "a|attributes\n   Comma separated list of OCCI attributes for the instantiation of the compute resource. Provided attribute values override defaults.\n   (defaults: $attribute_header)",
+    required	=> 0,
+    default		=> $attribute_header
 );
 
 $plugin->getopts;
@@ -344,15 +362,10 @@ $network_location = substr($network_location, length($occi_endpoint));
 
 # Create virtual machine with links to selected network and storage resources
 
-my %vm_attributes = (
-	'occi.core.title'			=> "FedCloud Nagios Probe VM",
-	'occi.core.summary'			=> "",
-	'occi.compute.architecture'	=> "x64",
-	'occi.compute.cores'		=> 1,
-	'occi.compute.memory'		=> 1	
-);
-
-my $attribute_header = render_attributes(\%vm_attributes);
+# Parse provided attributes and merge them with the defaults
+my %provided_vm_attributes = parse_attributes($plugin->opts->attributes);
+%vm_attributes = (%vm_attributes, %provided_vm_attributes);
+$attribute_header = render_attributes(\%vm_attributes);
 
 my $link_header =	"<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| .
 					"<$storage_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#storage";category="http://schemas.ogf.org/occi/core#link";|;
