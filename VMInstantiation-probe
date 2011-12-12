@@ -185,7 +185,7 @@ sub delete_compute {
 	our $log;
 	
 	if (defined $compute_location) {
-		$log->info("Destroying compute resource at $compute_location...")
+		$log->info("Destroying compute resource at $compute_location...");
 		my $request = construct_request("DELETE", $compute_location);
 		my $response = $http_agent->request($request);
 		if (not $response->is_success) {
@@ -324,7 +324,7 @@ if ($response->is_success) {
 	};
 }
 else {
-	$plugin->nagios_exit(CRITICAL, "HTTP request failed: " . $response->status_line;
+	$plugin->nagios_exit(CRITICAL, "HTTP request failed: " . $response->status_line);
 }
 
 # Find the needed resources (storage and network)
