@@ -182,8 +182,10 @@ sub delete_compute {
 	our $compute_location;
 	our $http_agent;
 	our $plugin;
+	our $log;
 	
 	if (defined $compute_location) {
+		$log->info("Destroying compute resource at $compute_location...")
 		my $request = construct_request("DELETE", $compute_location);
 		my $response = $http_agent->request($request);
 		if (not $response->is_success) {
@@ -199,6 +201,8 @@ sub delete_compute {
 
 sub render_attributes {
 
+	our $log;
+
 	my $attributes = shift;
 	my $header = "";
 
@@ -206,7 +210,7 @@ sub render_attributes {
 		$header .= $attribute_name . "=\"" . $attribute_value . "\",";
 	}	
 	
-	print "*** header: $header ***";
+	$log->debug("OCCI-Attributes: $header");
 	
 	return substr($header, 0, length($header) - 1);
 }
@@ -215,7 +219,7 @@ sub render_attributes {
 # Main
 # ---------------------------------------------------------------------------------------------------------------------
 
-$log->info("Started $PROGNAME...");
+$log->info("Started probe '$PROGNAME'...");
 
 # Create Nagios::Plugin instance
 our $plugin = Nagios::Plugin->new (usage 	=> "Usage: %s <-H <hostname> -p <port>>|<-f <file>>",
@@ -295,6 +299,8 @@ my ($request, $response);
 
 my $occi_endpoint = $plugin->opts->hostname . ":" . $plugin->opts->port;
 
+$log->info("Using OCCI service at: $occi_endpoint");
+
 our $http_agent = LWP::UserAgent->new;
 
 $request	= construct_request("GET", $occi_endpoint . "/-/");
@@ -315,11 +321,10 @@ if ($response->is_success) {
 				$type_locations{$desc_elements[0]} = $1;
 			} 
 		}
-		print "$_\n";
 	};
 }
 else {
-	print "Error: " . $response->status_line . "\n";
+	$plugin->nagios_exit(CRITICAL, "HTTP request failed: " . $response->status_line;
 }
 
 # Find the needed resources (storage and network)
