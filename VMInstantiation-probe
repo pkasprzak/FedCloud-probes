@@ -346,7 +346,6 @@ my %vm_attributes = (
 );
 
 my $attribute_header = render_attributes(\%vm_attributes);
-print "render: " . $attribute_header;
 
 my $link_header =	"<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| .
 					"<$storage_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#storage";category="http://schemas.ogf.org/occi/core#link";|;
@@ -358,6 +357,8 @@ $request->header('Category'			=> $category_header);
 $request->header('X-OCCI-Attribute'	=> $attribute_header);
 $request->header('Link'				=> $link_header);
 
+$log->debug("Compute resource instantiation request: " . $request->as_string);
+
 $response = $http_agent->request($request);
 
 if (not $response->is_success) {
@@ -366,19 +367,17 @@ if (not $response->is_success) {
 
 # Wait till compute resource is online
 our $compute_location = $response->header("Location");
-print "\n*** resp. loc. header: " . $compute_location;
-#print "\n*** resp. body: " . $response->content;
+
+$log->info("Location of compute instance: $compute_location");
 
 $request = construct_request("GET", $compute_location);
-
-print "\n*** request sent... ***";
 
 # Poll
 while (1) {
 	$response = $http_agent->request($request);
 	if ($response->is_success) {
 		my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
-		print "\n*** state: " . $attributes_hash{"occi.compute.state"};
+		$log->debug("Waiting for state 'active', current state: " . $attributes_hash{"occi.compute.state"});
 		if ($attributes_hash{"occi.compute.state"} eq "active") {
 			last;
 		}
