@@ -61,7 +61,7 @@ my $log4j_conf = q(
   log4perl.appender.Screen        	= Log::Log4perl::Appender::Screen
   log4perl.appender.Screen.stderr	= 0
   log4perl.appender.Screen.layout   = Log::Log4perl::Layout::PatternLayout
-  log4perl.appender.Screen.layout.ConversionPattern = [%d %F%M:%L] %m%n
+  log4perl.appender.Screen.layout.ConversionPattern = [%d %F:%M:%L] %m%n
 );
 
 Log::Log4perl::init(\$log4j_conf);
@@ -174,6 +174,8 @@ sub find_resource_location {
 					$log->info("Found at: $occi_location");
 					return ($occi_id, $occi_location);
 				}
+			} else {
+				$plugin->nagios_exit(CRITICAL, "HTTP error while searching for resource '$name': " . $response->status_line); 
 			}
 		}		
 	}
@@ -196,7 +198,7 @@ sub delete_compute {
 		my $request = construct_request("DELETE", $compute_location);
 		my $response = $http_agent->request($request);
 		if (not $response->is_success) {
-			$plugin->nagios_exit(CRITICAL, "Compute resource at location '$compute_location' could not be deleted!");
+			$plugin->nagios_exit(CRITICAL, "Compute resource at location '$compute_location' could not be deleted: " . $response->status_line);
 		}
 	} else {
 		# Nothing to do, no compute resource location defined
@@ -272,8 +274,8 @@ $plugin->add_arg(
 );
 
 $plugin->add_arg(
-    spec		=> 'password|pw=s',
-    help		=> "pw|password\n   OCCI-service password.\n   (default: none)",
+    spec		=> 'password|P=s',
+    help		=> "P|password\n   OCCI-service password.\n   (default: none)",
     required	=> 0,
     default		=> ''
 );
@@ -307,7 +309,8 @@ local $SIG{ALRM} = sub {
     local $SIG{TERM} = 'IGNORE';
     kill TERM => -$$;
     delete_compute();
-    $plugin->nagios_die("Timeout occured.");
+#    $plugin->nagios_die("Timeout occured.");
+    $plugin->nagios_exit(CRITICAL, "Compute resource could not be provisioned in the allocated time (" . $plugin->opts->timeout . "s)");
 };
 
 local $SIG{TERM} = sub {
@@ -342,7 +345,7 @@ if ($response->is_success) {
 		foreach (@desc_elements) {
 			$log->debug("      Processing element: $_");
 			if ($_ =~ m/location=(.*)/) {
-				$log->debug("   => got location: $1");
+				$log->debug("         => got location: $1");
 				$type_locations{$desc_elements[0]} = $1;
 			} 
 		}
