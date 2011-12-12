@@ -102,6 +102,8 @@ sub trim {
 
 sub construct_request {
 
+	our $plugin;
+
 	my $method 		= shift;
 	my $endpoint	= shift;
 	
@@ -109,6 +111,11 @@ sub construct_request {
 	
 	$request = HTTP::Request->new($method	=> $endpoint);
 	$request->header('Accept'				=> 'text/occi');
+	
+	# Support basic auth
+	unless ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
+		$request->authorization_basic($plugin->opts->user, $plugin->opts->password);
+	}
 	
 	return $request;
 }
@@ -192,7 +199,7 @@ sub delete_compute {
 			$plugin->nagios_exit(CRITICAL, "Compute resource at location '$compute_location' could not be deleted!");
 		}
 	} else {
-		# Nothing to do, no VM
+		# Nothing to do, no compute resource location defined
 	} 
 }
 
@@ -248,9 +255,16 @@ $plugin->add_arg(
 
 $plugin->add_arg(
     spec		=> 'user|u=s',
-    help		=> "u|user\n   OCCI-service username.\n   (default: occi)",
+    help		=> "u|user\n   OCCI-service username.\n   (default: none)",
     required	=> 0,
-    default		=> 'occi'
+    default		=> ''
+);
+
+$plugin->add_arg(
+    spec		=> 'password|pw=s',
+    help		=> "pw|password\n   OCCI-service password.\n   (default: none)",
+    required	=> 0,
+    default		=> ''
 );
 
 $plugin->add_arg(
@@ -265,13 +279,6 @@ $plugin->add_arg(
     help		=> "i|image\n   Name of the image to use for compute resource instantiation.\n   (default: Ubuntu 11.10 Server)",
     required	=> 0,
     default		=> 'Ubuntu 11.10 Server'
-);
-
-$plugin->add_arg(
-    spec		=> 'password|pw=s',
-    help		=> "pw|password\n   OCCI-service password.\n   (default: occi)",
-    required	=> 0,
-    default		=> 'occi'
 );
 
 $plugin->getopts;
