@@ -131,7 +131,12 @@ sub parse_attributes {
 
 	foreach (@attributes) {
 		if (trim($_) =~ m/(.*)=(.*)/) {
-			$attributes_hash{$1} = $2;
+			if (substr($2, 0, 1) eq "\"" or substr($2, 0, 1) eq "'") {
+				# Remove quotes if there are any
+				$attributes_hash{$1} = substr($2, 1, length($2) - 2);
+			} else {
+				$attributes_hash{$1} = $2;
+			}
 		}
 	}
 	return %attributes_hash;
@@ -216,7 +221,7 @@ sub render_attributes {
 	my $header = "";
 
 	while (my ($attribute_name, $attribute_value) = each(%$attributes)) {
-		$header .= $attribute_name . "=\"" . $attribute_value . "\",";
+		$header = qq(${header}${attribute_name}="${attribute_value}",);
 	}	
 	
 	$log->debug("OCCI-Attributes: $header");
