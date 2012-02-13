@@ -235,6 +235,9 @@ sub render_attributes {
 
 $log->info("Started probe '$PROGNAME'...");
 
+# Fix for too long headers ("500 Line too long (limit is 4096)")
+push(@LWP::Protocol::http::EXTRA_SOCK_OPTS, MaxLineLength => 16*1024);
+
 # Create Nagios::Plugin instance
 our $plugin = Nagios::Plugin->new (usage 	=> "Usage: %s <-H <hostname> -p <port>>|<-f <file>>",
                                   shortname	=> $SHORTNAME,
