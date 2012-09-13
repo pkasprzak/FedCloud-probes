@@ -37,7 +37,7 @@ use Data::Dumper;
 
 # Standard variables used in Nagios::Plugin constructor
 my $PROGNAME	= 'VMInstantiation-probe';
-my $VERSION		= '0.1';
+my $VERSION		= '0.2';
 my $DESCRIPTION	= 'Probe for checking the successful instantiation of a virtual machine';
 my $EXTRA_DESC	= '';
 my $SHORTNAME	= 'VM INSTANTIATION';
@@ -54,17 +54,17 @@ Copyright 2011 Piotr Kasprzak, Ali Jehangiri';
 
 my $log4j_conf = q(
 
-  log4perl.category.FedCloud.Nagios	= DEBUG, Screen
+    log4perl.category.FedCloud.Nagios   = DEBUG, Screen
 
 #  log4perl.appender.Logfile          = Log::Log4perl::Appender::File
 #  log4perl.appender.Logfile.filename = test.log
 #  log4perl.appender.Logfile.layout   = Log::Log4perl::Layout::PatternLayout
 #  log4perl.appender.Logfile.layout.ConversionPattern = [%r] %F %L %m%n
 
-  log4perl.appender.Screen        	= Log::Log4perl::Appender::Screen
-  log4perl.appender.Screen.stderr	= 0
-  log4perl.appender.Screen.layout   = Log::Log4perl::Layout::PatternLayout
-  log4perl.appender.Screen.layout.ConversionPattern = [%d %F:%M:%L] %m%n
+    log4perl.appender.Screen            = Log::Log4perl::Appender::Screen
+    log4perl.appender.Screen.stderr     = 0
+    log4perl.appender.Screen.layout     = Log::Log4perl::Layout::PatternLayout
+    log4perl.appender.Screen.layout.ConversionPattern = [%d %F:%M:%L] %m%n
 );
 
 Log::Log4perl::init(\$log4j_conf);
@@ -76,16 +76,16 @@ our $log = Log::Log4perl::get_logger("FedCloud::Nagios");
 
 sub exec_cmd {
 
-	my $c = shift; my ($state, $result);
+    my $c = shift; my ($state, $result);
 
-	$result = qx/$c/;
-	if ($? == -1) {
-		$state = CRITICAL;
-	} else {
-		$state = OK;
-	};
-	
-	return ($state, $result);
+    $result = qx/$c/;
+    if ($? == -1) {
+        $state = CRITICAL;
+    } else {
+        $state = OK;
+    };
+
+    return ($state, $result);
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -93,13 +93,16 @@ sub exec_cmd {
 
 sub trim {
 
-	my $string = shift;
+    my $string = shift;
 
-	$string =~ s/^\s+//;
-	$string =~ s/\s+$//;
+    $string =~ s/^\s+//;
+    $string =~ s/\s+$//;
 
     return $string;
 }
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Remove quotes froms string (brutal version)
 
 sub remove_quotes {
 
@@ -116,22 +119,22 @@ sub remove_quotes {
 
 sub construct_request {
 
-	our $plugin;
+    our $plugin;
 
-	my $method 		= shift;
-	my $endpoint	= shift;
+    my $method 		= shift;
+    my $endpoint	= shift;
 	
-	my $request;
+    my $request;
 
-	$request = HTTP::Request->new($method	=> $endpoint);
-	$request->header('Accept'				=> 'text/occi');
+    $request = HTTP::Request->new($method	=> $endpoint);
+    $request->header('Accept'				=> 'text/occi');
 	
-	# Support basic auth
-	unless ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
-		$request->authorization_basic($plugin->opts->user, $plugin->opts->password);
-	}
+    # Support basic auth
+    unless ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
+        $request->authorization_basic($plugin->opts->user, $plugin->opts->password);
+    }
 
-	return $request;
+    return $request;
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -139,22 +142,16 @@ sub construct_request {
 
 sub parse_attributes {
 
-	my $attribute_header = shift;
-	my @attributes = split(/,/, $attribute_header);
-	my %attributes_hash;
+    my $attribute_header = shift;
+    my @attributes = split(/,/, $attribute_header);
+    my %attributes_hash;
 
-	foreach (@attributes) {
-		if (trim($_) =~ m/(.*)=(.*)/) {
-#			if (substr($2, 0, 1) eq "\"" or substr($2, 0, 1) eq "'") {
-#				# Remove quotes if there are any
-#				$attributes_hash{$1} = substr($2, 1, length($2) - 2);
-#			} else {
-#				$attributes_hash{$1} = $2;
-#			}
-                         $attributes_hash{remove_quotes($1)} = remove_quotes($2);
-		}
-	}
-	return %attributes_hash;
+    foreach (@attributes) {
+	    if (trim($_) =~ m/(.*)=(.*)/) {
+            $attributes_hash{remove_quotes($1)} = remove_quotes($2);
+        }
+    }
+    return %attributes_hash;
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -162,47 +159,46 @@ sub parse_attributes {
 
 sub find_resource_location {
 
-	our $http_agent;
-	our %type_locations;
-	our $plugin;
-	our $log;
+    our $http_agent;
+    our %type_locations;
+    our $plugin;
+    our $log;
 
-        my $class   = shift;
-	my $type    = shift;
-	my $name    = shift;
-	my ($request, $response);
+    my $class   = shift;
+    my $type    = shift;
+    my $name    = shift;
+    my ($request, $response);
 	
-	my $type_location = $type_locations{$class}{$type};
+    my $type_location = $type_locations{$class}{$type};
 	
-	$log->info("Searching for resource '$name' of type '$type' of class '$class' at location '$type_location'...");
+    $log->info("Searching for resource '$name' of type '$type' of class '$class' at location '$type_location'...");
 	
-	if (not defined $type_location) { $plugin->nagios_exit(CRITICAL, "Could not find location for '$name' resource type!"); }
+    if (not defined $type_location) { $plugin->nagios_exit(CRITICAL, "Could not find location for '$name' resource type!"); }
 	
-	$request	= construct_request("GET", $type_location);
-	$response	= $http_agent->request($request);
+    $request	= construct_request("GET", $type_location);
+    $response	= $http_agent->request($request);
 
-	if ($response->is_success) {
+    if ($response->is_success) {
 
         my @locations = split(/,/, $response->header("X-OCCI-Location"));
-		foreach (@locations) {
-			# Search for target resource by evaluating its name
-			my $location = trim($_);
-			$request = construct_request("GET", $location);
-			$response = $http_agent->request($request);
-			if ($response->is_success) {
-				my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
-				if ($attributes_hash{"occi.core.title"} =~ m/$name/i) {
-					my ($occi_id, $occi_location) = ($attributes_hash{"occi.core.id"}, $location);
-					$log->info("Found at: $occi_location");
-					return ($occi_id, $occi_location);
-				}
-			} else {
-				$plugin->nagios_exit(CRITICAL, "HTTP error while searching for resource '$name': " . $response->status_line); 
-			}
-		}		
-	}
-	
-	$plugin->nagios_exit(CRITICAL, "Resource '$name' could not be found!");
+        foreach (@locations) {
+            # Search for target resource by evaluating its name
+            my $location = trim($_);
+            $request = construct_request("GET", $location);
+            $response = $http_agent->request($request);
+            if ($response->is_success) {
+                my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
+                if ($attributes_hash{"occi.core.title"} =~ m/$name/i) {
+                    my ($occi_id, $occi_location) = ($attributes_hash{"occi.core.id"}, $location);
+                    $log->info("Found at: $occi_location");
+                    return ($occi_id, $occi_location);
+                }
+            } else {
+                $plugin->nagios_exit(CRITICAL, "HTTP error while searching for resource '$name': " . $response->status_line); 
+            }
+        }		
+    }
+    $plugin->nagios_exit(CRITICAL, "Resource '$name' could not be found!");
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -210,21 +206,21 @@ sub find_resource_location {
 
 sub delete_compute {
 	
-	our $compute_location;
-	our $http_agent;
-	our $plugin;
-	our $log;
+    our $compute_location;
+    our $http_agent;
+    our $plugin;
+    our $log;
 	
-	if (defined $compute_location) {
-		$log->info("Destroying compute resource at $compute_location...");
-		my $request = construct_request("DELETE", $compute_location);
-		my $response = $http_agent->request($request);
-		if (not $response->is_success) {
-			$plugin->nagios_exit(CRITICAL, "Compute resource at location '$compute_location' could not be deleted: " . $response->status_line);
-		}
-	} else {
-		# Nothing to do, no compute resource location defined
-	} 
+    if (defined $compute_location) {
+        $log->info("Destroying compute resource at $compute_location...");
+        my $request = construct_request("DELETE", $compute_location);
+        my $response = $http_agent->request($request);
+        if (not $response->is_success) {
+            $plugin->nagios_exit(CRITICAL, "Compute resource at location '$compute_location' could not be deleted: " . $response->status_line);
+        }
+    } else {
+        # Nothing to do, no compute resource location defined
+    } 
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -232,18 +228,18 @@ sub delete_compute {
 
 sub render_attributes {
 
-	our $log;
+    our $log;
 
-	my $attributes = shift;
-	my $header = "";
+    my $attributes = shift;
+    my $header = "";
 
-	while (my ($attribute_name, $attribute_value) = each(%$attributes)) {
-		$header = qq(${header}${attribute_name}="${attribute_value}",);
-	}	
+    while (my ($attribute_name, $attribute_value) = each(%$attributes)) {
+        $header = qq(${header}${attribute_name}="${attribute_value}",);
+    }	
 	
-	$log->info("OCCI-Attributes: $header");
+    $log->info("OCCI-Attributes: $header");
 	
-	return substr($header, 0, length($header) - 1);
+    return substr($header, 0, length($header) - 1);
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -256,21 +252,21 @@ $log->info("Started probe '$PROGNAME'...");
 push(@LWP::Protocol::http::EXTRA_SOCK_OPTS, MaxLineLength => 16*1024);
 
 # Create Nagios::Plugin instance
-our $plugin = Nagios::Plugin->new (usage 	=> "Usage: %s <-H <hostname> -p <port>>|<-f <file>>",
-                                  shortname	=> $SHORTNAME,
-                                  version	=> $VERSION,
-                                  blurb		=> $DESCRIPTION,
-                                  extra		=> $EXTRA_DESC,
-                                  license	=> $LICENSE,
-                                  plugin 	=> $PROGNAME);
+our $plugin = Nagios::Plugin->new ( usage 	    => "Usage: %s <-H <hostname> -p <port>>|<-f <file>>",
+                                    shortname	=> $SHORTNAME,
+                                    version	    => $VERSION,
+                                    blurb		=> $DESCRIPTION,
+                                    extra		=> $EXTRA_DESC,
+                                    license	    => $LICENSE,
+                                    plugin 	    => $PROGNAME);
 
 # Compute resource default attributes
 my %vm_attributes = (
-	'occi.core.title'			=> "FedCloud Nagios Probe VM",
-	'occi.core.summary'			=> "",
-	'occi.compute.architecture'	=> "x64",
-	'occi.compute.cores'		=> 1,
-	'occi.compute.memory'		=> 1	
+    'occi.core.title'		    => "FedCloud Nagios Probe VM",
+    'occi.core.summary'		    => "",
+    'occi.compute.architecture'	=> "x64",
+    'occi.compute.cores'		=> 1,
+    'occi.compute.memory'		=> 1	
 );
 
 my $attribute_header = render_attributes(\%vm_attributes);
@@ -278,81 +274,83 @@ my $attribute_header = render_attributes(\%vm_attributes);
 # Define additional arguments
 
 $plugin->add_arg(
-	spec		=> 'hostname|H=s',
-    help		=> "H|hostname\n   Name or IP address of host to check.\n   (default: localhost)",
-    required	=> 0,
-    default		=> 'localhost'
-);
-
-$plugin->add_arg(
-    spec		=> 'port|p=i',
-    help		=> "p|port\n   Port of the OCCI service.\n   (default: 3000)",
-    required	=> 0,
-    default		=> 3000
-);
-
-$plugin->add_arg(
-    spec		=> 'user|u=s',
-    help		=> "u|user\n   OCCI-service username.\n   (default: none)",
-    required	=> 0,
-    default		=> ''
-);
-
-$plugin->add_arg(
-    spec		=> 'password|P=s',
-    help		=> "P|password\n   OCCI-service password.\n   (default: none)",
-    required	=> 0,
-    default		=> ''
-);
-
-$plugin->add_arg(
-    spec		=> 'network|n=s',
-    help		=> "n|network\n   Name of the network to use for compute resource instantiation.\n   (default: GWDG-Cloud)",
-    required	=> 0,
-    default		=> 'GWDG-Cloud'
-);
-
-$plugin->add_arg(
-    spec		=> 'image|i=s',
-    help		=> "i|image\n   Name of the image to use for compute resource instantiation.\n   (default: Ubuntu 11.10 Server)",
-    required	=> 0,
-    default		=> 'Ubuntu 11.10 Server'
-);
-
-$plugin->add_arg(
-    spec		=> 'attributes|a=s',
-    help		=> "a|attributes\n   Comma separated list of OCCI attributes for the instantiation of the compute resource. Provided attribute values override defaults.\n   (defaults: $attribute_header)",
-    required	=> 0,
-    default		=> $attribute_header
-);
-
-$plugin->add_arg(
-    spec    	=> 'imagerepo|r=s',
-    help     	=> "r|imagerepo\n   Type of image repository to use.\n   (default: one)",
+    spec        => 'hostname|H=s',
+    help        => "H|hostname\n   Name or IP address of host to check.\n   (default: localhost)",
     required    => 0,
-    default   	=> 'one'
+    default     => 'localhost'
 );
 
 $plugin->add_arg(
-    spec      	=> 'marketplace|m=s',
-    help     	=> "m|\n   Marketplace endpoint.\n   (default: http://marketplace.stratuslab.eu)",
+    spec        => 'port|p=i',
+    help        => "p|port\n   Port of the OCCI service.\n   (default: 3000)",
     required    => 0,
-    default   	=> 'http://marketplace.stratuslab.eu'
+    default     => 3000
 );
 
 $plugin->add_arg(
-    spec                => 'cert|c=s',
-    help                => "c|cert\n   Location of certificate for X509 authentication.\n   (default: /etc/nagios/hostcert.pem)",
+    spec        => 'user|u=s',
+    help        => "u|user\n   OCCI-service username.\n   (default: none)",
     required    => 0,
-    default             => '/etc/nagios/hostcert.pem'
+    default	    => ''
 );
 
 $plugin->add_arg(
-    spec                => 'key|k=s',
-    help                => "k|key\n   Location of certificate for X509 authentication..\n   (default: /etc/nagios/hostkey.pem)",
+    spec        => 'password|P=s',
+    help        => "P|password\n   OCCI-service password.\n   (default: none)",
     required    => 0,
-    default             => '/etc/nagios/hostkey.pem'
+    default     => ''
 );
+
+$plugin->add_arg(
+    spec        => 'network|n=s',
+    help        => "n|network\n   Name of the network to use for compute resource instantiation.\n   (default: GWDG-Cloud)",
+    required    => 0,
+    default     => 'GWDG-Cloud'
+);
+
+$plugin->add_arg(
+    spec        => 'image|i=s',
+    help	    => "i|image\n   Name of the image to use for compute resource instantiation.\n   (default: Ubuntu 11.10 Server)",
+    required    => 0,
+    default     => 'Ubuntu 11.10 Server'
+);
+
+$plugin->add_arg(
+    spec        => 'attributes|a=s',
+    help        => "a|attributes\n   Comma separated list of OCCI attributes for the instantiation of the compute resource. Provided attribute values override defaults.\n   (defaults: $attribute_header)",
+    required    => 0,
+    default     => $attribute_header
+);
+
+$plugin->add_arg(
+    spec        => 'imagerepo|r=s',
+    help        => "r|imagerepo\n   Type of image repository to use.\n   (default: one)",
+    required    => 0,
+    default     => 'one'
+);
+
+$plugin->add_arg(
+    spec        => 'marketplace|m=s',
+    help        => "m|\n   Marketplace endpoint.\n   (default: http://marketplace.stratuslab.eu)",
+    required    => 0,
+    default     => 'http://marketplace.stratuslab.eu'
+);
+
+$plugin->add_arg(
+    spec        => 'cert|c=s',
+    help        => "c|cert\n   Location of certificate for X509 authentication.\n   (default: /etc/nagios/hostcert.pem)",
+    required    => 0,
+    default     => '/etc/nagios/hostcert.pem'
+);
+
+$plugin->add_arg(
+    spec        => 'key|k=s',
+    help        => "k|key\n   Location of certificate for X509 authentication..\n   (default: /etc/nagios/hostkey.pem)",
+    required    => 0,
+    default     => '/etc/nagios/hostkey.pem'
+);
+
+
 
 
 $plugin->getopts;
@@ -363,7 +361,6 @@ local $SIG{ALRM} = sub {
     local $SIG{TERM} = 'IGNORE';
     kill TERM => -$$;
     delete_compute();
-#    $plugin->nagios_die("Timeout occured.");
     $plugin->nagios_exit(CRITICAL, "Compute resource could not be provisioned in the allocated time (" . $plugin->opts->timeout . "s)");
 };
 
@@ -379,18 +376,14 @@ alarm($plugin->opts->timeout);
 # set environment for X509 authentication if username and pass are not set
 #local %ENV = %ENV;
 
-BEGIN {
  
-#if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
+if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
 
-    $ENV{HTTPS_DEBUG} = 1;
-#    $ENV{HTTPS_CA_DIR} = '/Users/pkasprzak/work/X509/grid-ca/unpacked/';
-    $ENV{HTTPS_CA_DIR} = '/etc/grid-security/certificates';
-    $ENV{HTTPS_KEY_FILE}  = '/root/piotr_kasprzak_grid_np.key';
-    $ENV{HTTPS_CERT_FILE} = '/root/piotr_kasprzak_grid.crt';
+#    $ENV{HTTPS_DEBUG} = 1;
+    $ENV{HTTPS_CA_DIR} 	  = '/etc/grid-security/certificates';
 
-#    $ENV{HTTPS_KEY_FILE}  = $plugin->opts->key  if ( -f $plugin->opts->key );
-#    $ENV{HTTPS_CERT_FILE} = $plugin->opts->cert if ( -f $plugin->opts->cert );
+    $ENV{HTTPS_KEY_FILE}  = $plugin->opts->key  if ( -f $plugin->opts->key );
+    $ENV{HTTPS_CERT_FILE} = $plugin->opts->cert if ( -f $plugin->opts->cert );
 
 }
 
@@ -401,16 +394,21 @@ my $occi_endpoint = $plugin->opts->hostname . ":" . $plugin->opts->port;
 
 $log->info("Using OCCI service at: $occi_endpoint");
 
-#our $http_agent = LWP::UserAgent->new;
+# Create HTTP agent
+our $http_agent = undef;
 
-our $http_agent = LWP::UserAgent->new(
-    ssl_opts   => {
-#        verify_hostname => 1,
-        SSL_cert_file   => '/root/cert.pem',
-        SSL_key_file    => '/root/key.pem',
-    },
-);
+if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
 
+    $http_agent = LWP::UserAgent->new(
+        ssl_opts   => {
+#        	verify_hostname => 1,
+            SSL_cert_file   => '/root/cert.pem',
+            SSL_key_file    => '/root/key.pem',
+        },
+    );
+} else {
+    $http_agent = LWP::UserAgent->new;
+}
 
 $request	= construct_request("GET", $occi_endpoint . "/-/");
 $response	= $http_agent->request($request);
@@ -446,10 +444,8 @@ if ($response->is_success) {
                     # Relative links provided, need to extend them
                     $location = $occi_endpoint . trim($location);
                     $log->info("         => extended location: $location");
-
                 }
-#				$type_locations{$desc_elements[0]} = $location;
-			}
+		    }
 
             # Check for class attribute
             if ($_ =~ m/class=(.*)/) {
@@ -465,19 +461,19 @@ if ($response->is_success) {
 	};
 }
 else {
-	$plugin->nagios_exit(CRITICAL, "HTTP request failed: " . $response->status_line);
+    $plugin->nagios_exit(CRITICAL, "HTTP request failed: " . $response->status_line);
 }
 
 # Find the needed resources (storage and network)
 my ($storage_id, $storage_location);
 
-if ( $plugin->opts->imagerepo eq "one" ){
-	($storage_id, $storage_location) = find_resource_location("kind", "storage", $plugin->opts->image);
-   	$storage_location = substr($storage_location, length($occi_endpoint));
-} elsif ( $plugin->opts->imagerepo eq "stratuslab" ){
-  	$storage_location = $plugin->opts->marketplace . "/metadata/" . $plugin->opts->image;
+if ( $plugin->opts->imagerepo eq "one" ) {
+    ($storage_id, $storage_location) = find_resource_location("kind", "storage", $plugin->opts->image);
+    $storage_location = substr($storage_location, length($occi_endpoint));
+} elsif ( $plugin->opts->imagerepo eq "stratuslab" ) {
+    $storage_location = $plugin->opts->marketplace . "/metadata/" . $plugin->opts->image;
 } else {
-   	$plugin->nagios_exit(CRITICAL, "Unknown image repository: " . $plugin->opts->imagerepo);
+    $plugin->nagios_exit(CRITICAL, "Unknown image repository: " . $plugin->opts->imagerepo);
 }
 
 my ($network_id, $network_location) = find_resource_location("kind", "network", $plugin->opts->network);
@@ -495,6 +491,7 @@ $attribute_header = render_attributes(\%vm_attributes);
 # Stuart changes:
 #my $link_header =	"<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| .
 #					"<$storage_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#storage";category="http://schemas.ogf.org/occi/core#link";|;
+
 my $link_header = "<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| . "<$storage_location>";
 
 if ( $plugin->opts->imagerepo eq "stratuslab" ){
@@ -517,19 +514,19 @@ $response = $http_agent->request($request);
 print $response->headers_as_string;
 
 if (not $response->is_success) {
-	$plugin->nagios_exit(CRITICAL, "Could not instantiate virtual machine: " . $response->status_line); 
+    $plugin->nagios_exit(CRITICAL, "Could not instantiate virtual machine: " . $response->status_line); 
 }
 
 # Wait till compute resource is online
 our $compute_location = undef;
 
-defined($response->header("Location")) 		&& ($compute_location = $response->header("Location"));
-defined($response->header("X-OCCI-Location")) 	&& ($compute_location = $response->header("X-OCCI-Location"));
+defined($response->header("Location"))          && ($compute_location = $response->header("Location"));
+defined($response->header("X-OCCI-Location"))   && ($compute_location = $response->header("X-OCCI-Location"));
 
 if (not ($response->is_success && defined($compute_location))) {
-	$log->info("Could not determine location of instantiated VM!");
-	$log->info("Response: " . Dumper(\$response));
-	$plugin->nagios_exit(CRITICAL, "Could not instantiate virtual machine: no location!");
+    $log->info("Could not determine location of instantiated VM!");
+    $log->info("Response: " . Dumper(\$response));
+    $plugin->nagios_exit(CRITICAL, "Could not instantiate virtual machine: no location!");
 } 
 
 $log->info("Location of compute instance: $compute_location");
@@ -538,16 +535,16 @@ $request = construct_request("GET", $compute_location);
 
 # Poll
 while (1) {
-	$response = $http_agent->request($request);
-        print Dumper(\$response);
-	if ($response->is_success) {
-		my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
-		$log->info("Waiting for state 'active', current state: " . $attributes_hash{"occi.compute.state"});
-		if ($attributes_hash{"occi.compute.state"} eq "active") {
-			last;
-		}
-	}
-	sleep(1);
+    $response = $http_agent->request($request);
+#    print Dumper(\$response);
+    if ($response->is_success) {
+        my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
+        $log->info("Waiting for state 'active', current state: " . $attributes_hash{"occi.compute.state"});
+        if ($attributes_hash{"occi.compute.state"} eq "active") {
+            last;
+        }
+    }
+    sleep(1);
 }
 
 # Delete compute resource
