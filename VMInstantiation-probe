@@ -29,6 +29,8 @@
 
 use strict;
 use warnings;
+use locale;
+
 use Nagios::Plugin;
 use Log::Log4perl;
 use LWP::UserAgent;
@@ -261,7 +263,7 @@ our $plugin = Nagios::Plugin->new ( usage 	    => "Usage: %s <-H <hostname> -p <
                                     plugin 	    => $PROGNAME);
 
 # Compute resource default attributes
-my %vm_attributes = (
+my %vm_attributes_opennebula = (
     'occi.core.title'		    => "FedCloud Nagios Probe VM",
     'occi.core.summary'		    => "",
     'occi.compute.architecture'	=> "x64",
@@ -269,7 +271,7 @@ my %vm_attributes = (
     'occi.compute.memory'		=> 1	
 );
 
-my $attribute_header = render_attributes(\%vm_attributes);
+my $attribute_header = render_attributes(\%vm_attributes_opennebula);
 
 # Define additional arguments
 
@@ -350,8 +352,12 @@ $plugin->add_arg(
     default     => '/etc/nagios/hostkey.pem'
 );
 
-
-
+$plugin->add_arg(
+    spec        => 'platform|o=s',
+    help        => "o|platform\n   Platform type (openstack / opennebula)\n   (default: opennebula)",
+    required    => 0,
+    default     => 'opennebula'
+);
 
 $plugin->getopts;
 
@@ -375,7 +381,6 @@ alarm($plugin->opts->timeout);
 
 # set environment for X509 authentication if username and pass are not set
 #local %ENV = %ENV;
-
  
 if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
 
@@ -384,7 +389,6 @@ if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
 
     $ENV{HTTPS_KEY_FILE}  = $plugin->opts->key  if ( -f $plugin->opts->key );
     $ENV{HTTPS_CERT_FILE} = $plugin->opts->cert if ( -f $plugin->opts->cert );
-
 }
 
 my ($state, $result, $curl);
@@ -399,11 +403,17 @@ our $http_agent = undef;
 
 if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
 
+    $log->info("Using SSL...");
+
     $http_agent = LWP::UserAgent->new(
         ssl_opts   => {
 #        	verify_hostname => 1,
-            SSL_cert_file   => '/root/cert.pem',
-            SSL_key_file    => '/root/key.pem',
+            SSL_cert_file   => $plugin->opts->cert,
+            SSL_key_file    => $plugin->opts->key,
+
+#            SSL_cert_file   => '/root/piotr_kasprzak_grid.crt',
+#            SSL_key_file    => '/root/piotr_kasprzak_grid_np.key',
+
         },
     );
 } else {
@@ -412,6 +422,9 @@ if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
 
 $request	= construct_request("GET", $occi_endpoint . "/-/");
 $response	= $http_agent->request($request);
+
+print Dumper(\$request);
+print Dumper(\$response);
 
 # Build category -> location hash
 $log->info("Creating category -> location hash...");
@@ -483,29 +496,45 @@ $network_location = substr($network_location, length($occi_endpoint));
 
 # Create virtual machine with links to selected network and storage resources
 
-# Parse provided attributes and merge them with the defaults
-my %provided_vm_attributes = parse_attributes($plugin->opts->attributes);
-%vm_attributes = (%vm_attributes, %provided_vm_attributes);
-$attribute_header = render_attributes(\%vm_attributes);
+if ($plugin->opts->platform eq lc("opennebula")) {
 
-# Stuart changes:
-#my $link_header =	"<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| .
-#					"<$storage_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#storage";category="http://schemas.ogf.org/occi/core#link";|;
+    # Create request for OpenNebula
 
-my $link_header = "<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| . "<$storage_location>";
+    # Parse provided attributes and merge them with the defaults
+    my %provided_vm_attributes = parse_attributes($plugin->opts->attributes);
+    my %vm_attributes = (%vm_attributes_opennebula, %provided_vm_attributes);
+    my $attribute_header = render_attributes(\%vm_attributes);
 
-if ( $plugin->opts->imagerepo eq "stratuslab" ){
-    $link_header = $link_header . q|;rel="http://schemas.ogf.org/occi/core#link";category="http://schemas.ogf.org/occi/infrastructure#storagelink";|;
+    # Stuart changes:
+    #my $link_header =	"<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| .
+    #					"<$storage_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#storage";category="http://schemas.ogf.org/occi/core#link";|;
+
+    my $link_header = "<$network_location>" . q|;rel="http://schemas.ogf.org/occi/infrastructure#network";category="http://schemas.ogf.org/occi/core#link";,| . "<$storage_location>";
+
+    if ( $plugin->opts->imagerepo eq "stratuslab" ){
+        $link_header = $link_header . q|;rel="http://schemas.ogf.org/occi/core#link";category="http://schemas.ogf.org/occi/infrastructure#storagelink";|;
+    } else {
+        $link_header = $link_header . q|;rel="http://schemas.ogf.org/occi/infrastructure#storage";category="http://schemas.ogf.org/occi/core#link";|;
+    }
+
+    my $category_header = q|compute; scheme="http://schemas.ogf.org/occi/infrastructure#";class="kind";|;
+
+    $request = construct_request("POST", $occi_endpoint . "/compute/");
+    $request->header('Category'			=> $category_header);
+    $request->header('X-OCCI-Attribute'	=> $attribute_header);
+    $request->header('Link'				=> $link_header);
+
 } else {
-    $link_header = $link_header . q|;rel="http://schemas.ogf.org/occi/infrastructure#storage";category="http://schemas.ogf.org/occi/core#link";|;
+
+    # Create request for OpenStack
+
+    my $compute_kind        = q|compute; scheme="http://schemas.ogf.org/occi/infrastructure#";class="kind";|; 
+    my $resource_mixin      = q|m1.tiny; scheme="http://schemas.openstack.org/template/resource#"; class="mixin"|; 
+    my $os_template_mixin   = $plugin->opts->image . q|; scheme="http://schemas.openstack.org/template/os#"; class="mixin"|;
+
+    $request = construct_request("POST", $occi_endpoint . "/compute/");
+    $request->header('Category' => join(",", ($compute_kind, $resource_mixin, $os_template_mixin)));
 }
-
-my $category_header = q|compute; scheme="http://schemas.ogf.org/occi/infrastructure#";class="kind";|;
-
-$request = construct_request("POST", $occi_endpoint . "/compute/");
-$request->header('Category'			=> $category_header);
-$request->header('X-OCCI-Attribute'	=> $attribute_header);
-$request->header('Link'				=> $link_header);
 
 $log->info("Compute resource instantiation request: " . $request->as_string);
 
