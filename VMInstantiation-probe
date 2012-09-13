@@ -128,9 +128,12 @@ sub construct_request {
 	
     my $request;
 
-    $request = HTTP::Request->new($method	=> $endpoint);
-    $request->header('Content-Type'				=> 'text/occi');
-	
+    $request = HTTP::Request->new($method => $endpoint);
+    # This is needed by OS OCCI for text/occi
+    $request->header('Content-Type' => 'text/occi');
+    # This is needed by OS OCCI for text/occi
+    $request->header('Accept'       => 'text/occi');
+
     # Support basic auth
     unless ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
         $request->authorization_basic($plugin->opts->user, $plugin->opts->password);
@@ -423,9 +426,6 @@ if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
 $request	= construct_request("GET", $occi_endpoint . "/-/");
 $response	= $http_agent->request($request);
 
-print Dumper(\$request);
-print Dumper(\$response);
-
 # Build category -> location hash
 $log->info("Creating category -> location hash...");
 
@@ -534,17 +534,11 @@ if (lc($plugin->opts->platform) eq "opennebula") {
 
     $request = construct_request("POST", $occi_endpoint . "/compute/");
     $request->header('Category' => join(",", ($compute_kind, $resource_mixin, $os_template_mixin)));
-
-    print Dumper(\$request);
-    print Dumper(\$response);
-
 }
 
 $log->info("Compute resource instantiation request: " . $request->as_string);
 
 $response = $http_agent->request($request);
-
-print $response->headers_as_string;
 
 if (not $response->is_success) {
     $plugin->nagios_exit(CRITICAL, "Could not instantiate virtual machine: " . $response->status_line); 
@@ -576,20 +570,14 @@ POLL: while (1) {
         if (lc($plugin->opts->platform) eq "openstack") {
             my $body = $response->decoded_content;
             foreach my $line (split /\n/ , $body) {
-                print $line . "\n"; 
                 if ($line =~ m/^X-OCCI-Attribute:.+occi\.compute\.state.*=.*"(.*)"/i) {
                     $current_state = $1;
-#                    last POLL;
                 }
             }
         } else { 
             # For opennebula header parsing works...
             my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
             $current_state = $attributes_hash{"occi.compute.state"};
-#            if ($attributes_hash{"occi.compute.state"} eq "active") {
-#                last POLL;
-#            }
-
         }
     }
     if ($current_state eq "active") {
