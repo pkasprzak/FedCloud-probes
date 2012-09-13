@@ -566,19 +566,20 @@ POLL: while (1) {
     my $current_state = undef;
 
     if ($response->is_success) {
+#        print Dumper(\$response);
         # OpenStack returns attributes in body not in headers as it should be with text/occi...
-        if (lc($plugin->opts->platform) eq "openstack") {
-            my $body = $response->decoded_content;
-            foreach my $line (split /\n/ , $body) {
-                if ($line =~ m/^X-OCCI-Attribute:.+occi\.compute\.state.*=.*"(.*)"/i) {
-                    $current_state = $1;
-                }
-            }
-        } else { 
+#        if (lc($plugin->opts->platform) eq "openstack") {
+#            my $body = $response->decoded_content;
+#            foreach my $line (split /\n/ , $body) {
+#                if ($line =~ m/^X-OCCI-Attribute:.+occi\.compute\.state.*=.*"(.*)"/i) {
+ #                   $current_state = $1;
+ #               }
+ #           }
+ #       } else { 
             # For opennebula header parsing works...
             my %attributes_hash = parse_attributes($response->header("X-OCCI-Attribute"));
             $current_state = $attributes_hash{"occi.compute.state"};
-        }
+ #       }
     }
     if ($current_state eq "active") {
         last POLL;
