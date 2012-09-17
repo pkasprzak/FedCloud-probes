@@ -441,7 +441,7 @@ if ($response->is_success) {
         $log->info("   Processing category string: $_");
 
         my @desc_elements = split(/;/, $_);
-        my $term        = $desc_elements[0];
+        my $term        = trim($desc_elements[0]);
         my $location    = undef;
         my $class       = undef;
 
