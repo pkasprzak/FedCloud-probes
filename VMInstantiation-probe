@@ -234,12 +234,17 @@ sub delete_compute {
 sub render_attributes {
 
     our $log;
+#    our $vm_attribues_types;
 
     my $attributes = shift;
     my $header = "";
 
     while (my ($attribute_name, $attribute_value) = each(%$attributes)) {
-        $header = qq(${header}${attribute_name}="${attribute_value}",);
+        if (exists $main::vm_attributes_types{$attribute_name} and ($main::vm_attributes_types{$attribute_name} eq $main::TYPE_NUMERIC)) {
+		$header = qq(${header}${attribute_name}=${attribute_value},);
+	} else {
+        	$header = qq(${header}${attribute_name}="${attribute_value}",);
+	}
     }	
 	
     $log->info("OCCI-Attributes: $header");
@@ -250,6 +255,9 @@ sub render_attributes {
 # ---------------------------------------------------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------------------------------------------------
+
+our $TYPE_STRING 	= "string";
+our $TYPE_NUMERIC 	= "numeric";
 
 $log->info("Started probe '$PROGNAME'...");
 
@@ -267,11 +275,19 @@ our $plugin = Nagios::Plugin->new ( usage 	    => "Usage: %s <-H <hostname> -p <
 
 # Compute resource default attributes
 my %vm_attributes_opennebula = (
-    'occi.core.title'		    => "FedCloud Nagios Probe VM",
-    'occi.core.summary'		    => "",
-    'occi.compute.architecture'	=> "x64",
+    'occi.core.title'		    	=> "FedCloud Nagios Probe VM",
+    'occi.core.summary'		    	=> "",
+    'occi.compute.architecture'		=> "x64",
     'occi.compute.cores'		=> 1,
     'occi.compute.memory'		=> 1	
+);
+
+our %vm_attributes_types = (
+    'occi.core.title'                   => $TYPE_STRING, 
+    'occi.core.summary'                 => $TYPE_STRING,
+    'occi.compute.architecture'         => $TYPE_STRING,
+    'occi.compute.cores'                => $TYPE_NUMERIC,
+    'occi.compute.memory'               => $TYPE_NUMERIC
 );
 
 my $attribute_header = render_attributes(\%vm_attributes_opennebula);
@@ -410,12 +426,9 @@ if ($plugin->opts->user eq '' or $plugin->opts->password eq '') {
 
     $http_agent = LWP::UserAgent->new(
         ssl_opts   => {
-#        	verify_hostname => 1,
+
             SSL_cert_file   => $plugin->opts->cert,
             SSL_key_file    => $plugin->opts->key,
-
-#            SSL_cert_file   => '/root/piotr_kasprzak_grid.crt',
-#            SSL_key_file    => '/root/piotr_kasprzak_grid_np.key',
 
         },
     );
